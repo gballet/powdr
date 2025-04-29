@@ -1327,6 +1327,8 @@ struct Executor<'a, 'b, F: FieldElement> {
     pil_other_links: HashMap<(&'static str, &'static str), Vec<Identity<F>>>,
     // these are "hot" fixed columns that are accessed directly by the executor
     cached_fixed_cols: Vec<Vec<F>>,
+
+    publics: Vec<F>,
 }
 
 impl<F: FieldElement> Executor<'_, '_, F> {
@@ -1362,6 +1364,10 @@ impl<F: FieldElement> Executor<'_, '_, F> {
             .get(col as usize)
             .map(|v| v[row])
             .unwrap_or_default()
+    }
+
+    fn get_publics(&self) -> Vec<F> {
+        return self.publics;
     }
 
     fn sink_id(&self) -> u32 {
@@ -2604,6 +2610,10 @@ impl<F: FieldElement> Executor<'_, '_, F> {
                 let limb = self.reg_read(0, args[1].u(), lid);
                 set_col!(tmp1_col, idx);
                 set_col!(tmp2_col, limb);
+                if lid >= self.publics.len() {
+                    self.publics.resize(lid + 1, F::default());
+                }
+                self.publics[lid] = limb;
                 log::debug!("Committing public: idx={idx}, limb={limb}");
                 let lid = self.instr_link_id(instr, MachineInstance::publics, 0);
                 submachine_op!(
@@ -2852,6 +2862,8 @@ pub struct Execution<F: FieldElement> {
     pub memory_accesses: Vec<MemOperation>,
     /// final register memory state
     pub register_memory: RegisterMemoryState<F>,
+    /// public commits
+    pub publics: Vec<F>,
 }
 
 #[derive(Clone, Copy)]
@@ -3041,6 +3053,7 @@ fn execute_inner<F: FieldElement>(
         pil_instruction_links: vec![None; Instruction::count() * MachineInstance::count()],
         pil_other_links: Default::default(),
         cached_fixed_cols: Default::default(),
+        publics: vec![],
     };
 
     e.init();
